@@ -59,7 +59,7 @@ def home():
                 --progress-bg: #4a0f0f;
                 --progress-fill: #ff4d4d;
             }
-             @keyframes gradient {
+            @keyframes gradient {
                 0% { background-position: 0% 50%; }
                 50% { background-position: 100% 50%; }
                 100% { background-position: 0% 50%; }
@@ -105,21 +105,17 @@ def home():
             #page2 {
                 transform: translateY(100%);
             }
-            h1 {
+            h1, h2 {
                 font-size: 5vw;
                 margin-bottom: 2vh;
                 text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
             }
-            #status {
-                font-size: 8vw;
+            #status, #totalValue, #spendingValue {
+                font-size: 6vw;
                 font-weight: bold;
                 margin: 2vh 0;
                 text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            }
-            #totalValue {
-                font-size: 6vw;
-                margin: 2vh 0;
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+                transition: color 0.3s ease;
             }
             .progress-bar {
                 background-color: var(--progress-bg);
@@ -159,21 +155,27 @@ def home():
             #page2 {
                 background-color: rgba(26, 5, 5, 0.9);
             }
-            #page2 h2 {
-                font-size: 4vw;
-                margin-bottom: 3vh;
+            #spendingGame {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 1rem;
+                margin-top: 2rem;
             }
-            #page2 p {
-                font-size: 2.5vw;
-                margin-bottom: 2vh;
+            .item {
+                background-color: rgba(255, 255, 255, 0.1);
+                padding: 1rem;
+                border-radius: 0.5rem;
+                cursor: pointer;
+                transition: background-color 0.3s ease;
+            }
+            .item:hover {
+                background-color: rgba(255, 255, 255, 0.2);
             }
             @media (orientation: portrait) {
-                h1 { font-size: 8vw; }
-                #status { font-size: 12vw; }
-                #totalValue { font-size: 10vw; }
+                h1, h2 { font-size: 8vw; }
+                #status, #totalValue, #spendingValue { font-size: 10vw; }
                 #progressText { font-size: 5vw; }
-                #page2 h2 { font-size: 6vw; }
-                #page2 p { font-size: 4vw; }
                 .scroll-indicator { bottom: 12% }
             }
         </style>
@@ -191,20 +193,29 @@ def home():
                 <div class="scroll-indicator" onclick="smoothScroll()">▼</div>
             </div>
             <div class="page" id="page2">
-                <h2>About Moe's Journey</h2>
-                <p>Follow Moe's exciting journey to becoming a millionaire! This page tracks Moe's progress in real-time, updating every few seconds to show the latest value of his holdings.</p>
-                <h2>How It Works</h2>
-                <p>We're tracking the value of Moe's tokens using live data from the cryptocurrency markets. As the token price fluctuates, you'll see Moe's total value change in real-time.</p>
+                <h2>Spend Moe's Money</h2>
+                <div id="spendingValue">${{ '{:,.2f}'.format(initial_value) }}</div>
+                <div id="spendingGame"></div>
                 <div class="scroll-indicator" onclick="smoothScroll()">▲</div>
             </div>
         </div>
         <script>
             let currentValue = {{ initial_value }};
             let targetValue = {{ initial_value }};
+            let spendingValue = {{ initial_value }};
             const millionUSD = {{ MILLION_USD }};
             let isMillionaire = false;
             let isSecondPageVisible = false;
             let isScrolling = false;
+            let lastValue = currentValue;
+
+            const items = [
+                { name: "Coffee", price: 5 },
+                { name: "Pizza", price: 15 },
+                { name: "Smartphone", price: 1000 },
+                { name: "Car", price: 30000 },
+                { name: "House", price: 300000 },
+            ];
 
             function formatNumber(num) {
                 return num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -213,10 +224,20 @@ def home():
             function updateDisplay() {
                 const statusElement = document.getElementById('status');
                 const totalValueElement = document.getElementById('totalValue');
+                const spendingValueElement = document.getElementById('spendingValue');
                 const progressFill = document.getElementById('progressFill');
                 const progressText = document.getElementById('progressText');
                 
+                if (currentValue > lastValue) {
+                    totalValueElement.style.color = '#4CAF50';
+                    setTimeout(() => { totalValueElement.style.color = ''; }, 1000);
+                } else if (currentValue < lastValue) {
+                    totalValueElement.style.color = '#ff4d4d';
+                    setTimeout(() => { totalValueElement.style.color = ''; }, 1000);
+                }
+                
                 totalValueElement.textContent = '$' + formatNumber(currentValue);
+                spendingValueElement.textContent = '$' + formatNumber(spendingValue);
                 
                 const progress = (currentValue / millionUSD) * 100;
                 progressFill.style.width = Math.min(progress, 100) + '%';
@@ -243,11 +264,36 @@ def home():
                     progressFill.style.background = "linear-gradient(270deg, #ff4d4d, #ff3333, #ff4d4d)";
                     totalValueElement.style.animation = "none";
                 }
+                
+                updateSpendingGame();
+                lastValue = currentValue;
+            }
+
+            function updateSpendingGame() {
+                const gameContainer = document.getElementById('spendingGame');
+                gameContainer.innerHTML = '';
+                items.forEach(item => {
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'item';
+                    itemElement.textContent = `${item.name} ($${item.price})`;
+                    itemElement.onclick = () => buyItem(item);
+                    gameContainer.appendChild(itemElement);
+                });
+            }
+
+            function buyItem(item) {
+                if (spendingValue >= item.price) {
+                    spendingValue -= item.price;
+                    updateDisplay();
+                } else {
+                    alert("Not enough money to buy this item!");
+                }
             }
 
             function interpolateValues() {
                 const interpolationFactor = 0.1;
                 currentValue += (targetValue - currentValue) * interpolationFactor;
+                spendingValue = currentValue;  // Reset spending value to current value
                 updateDisplay();
             }
 
@@ -311,8 +357,9 @@ def home():
             // Fetch new data every 3 seconds
             setInterval(fetchLatestData, 3000);
 
-            // Initial fetch
+            // Initial fetch and display update
             fetchLatestData();
+            updateDisplay();
         </script>
     </body>
     </html>
