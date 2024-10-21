@@ -1,5 +1,6 @@
 from flask import Flask, render_template_string, jsonify
 import requests
+import time
 
 app = Flask(__name__)
 
@@ -7,29 +8,40 @@ MOE_ADDRESS = "HKprCtGbnh1j8xeQggzWhhVd3kwDUdphqPqDP8vMay8b"
 INITIAL_TOKENS = 169893235666.24582
 MILLION_USD = 1000000
 
-def fetch_token_price(address):
+# Cache variables
+last_price = 0
+last_update_time = 0
+cache_duration = 5  # Cache duration in seconds
+
+def fetch_token_price():
+    global last_price, last_update_time
+    current_time = time.time()
+
+    if current_time - last_update_time < cache_duration:
+        return last_price
+
     base_url = "https://api.dexscreener.com/latest/dex/pairs/solana"
-    url = f"{base_url}/{address}"
+    url = f"{base_url}/{MOE_ADDRESS}"
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     
-    response = requests.get(url, headers=headers)
+    try:
+        response = requests.get(url, headers=headers, timeout=3)
+        if response.status_code == 200:
+            data = response.json()
+            if 'pairs' in data and len(data['pairs']) > 0:
+                last_price = float(data['pairs'][0].get('priceUsd', '0'))
+                last_update_time = current_time
+    except Exception as e:
+        print(f"Error fetching price: {str(e)}")
     
-    if response.status_code == 200:
-        data = response.json()
-        if 'pairs' in data and len(data['pairs']) > 0:
-            price = data['pairs'][0].get('priceUsd', '0')
-            return float(price)
-        else:
-            return 0
-    else:
-        return 0
+    return last_price
 
 @app.route('/')
 def home():
-    initial_price = fetch_token_price(MOE_ADDRESS)
+    initial_price = fetch_token_price()
     initial_value = initial_price * INITIAL_TOKENS
     
     html = '''
@@ -47,7 +59,7 @@ def home():
                 --progress-bg: #4a0f0f;
                 --progress-fill: #ff4d4d;
             }
-            @keyframes gradient {
+             @keyframes gradient {
                 0% { background-position: 0% 50%; }
                 50% { background-position: 100% 50%; }
                 100% { background-position: 0% 50%; }
@@ -65,29 +77,33 @@ def home():
                 padding: 0;
                 box-sizing: border-box;
             }
-            html, body {
-                height: 100vh;
-                width: 100vw;
-                overflow: hidden;
-            }
             body {
                 font-family: 'Arial', sans-serif;
                 background-color: var(--bg-color);
                 color: var(--text-color);
-                display: flex;
-                justify-content: center;
-                align-items: center;
                 transition: background-color 1s ease;
+                overflow: hidden;
             }
             .container {
+                height: 100vh;
+                overflow-y: hidden;
+            }
+            .page {
+                height: 100vh;
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
                 align-items: center;
                 text-align: center;
-                width: 100vw;
-                height: 100vh;
                 padding: 5vw;
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                transition: transform 0.5s cubic-bezier(0.65, 0, 0.35, 1);
+            }
+            #page2 {
+                transform: translateY(100%);
             }
             h1 {
                 font-size: 5vw;
@@ -127,29 +143,67 @@ def home():
                 font-weight: bold;
                 font-size: 3vw;
             }
+            .scroll-indicator {
+                position: absolute;
+                bottom: 5vh;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 3rem;
+                cursor: pointer;
+                animation: pulse 2s infinite;
+                transition: opacity 0.3s ease;
+            }
+            .scroll-indicator:hover {
+                opacity: 0.7;
+            }
+            #page2 {
+                background-color: rgba(26, 5, 5, 0.9);
+            }
+            #page2 h2 {
+                font-size: 4vw;
+                margin-bottom: 3vh;
+            }
+            #page2 p {
+                font-size: 2.5vw;
+                margin-bottom: 2vh;
+            }
             @media (orientation: portrait) {
                 h1 { font-size: 8vw; }
                 #status { font-size: 12vw; }
                 #totalValue { font-size: 10vw; }
                 #progressText { font-size: 5vw; }
+                #page2 h2 { font-size: 6vw; }
+                #page2 p { font-size: 4vw; }
             }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>Is Moe a Millionaire Yet?</h1>
-            <div id="status">Not Yet</div>
-            <div id="totalValue">${{ '{:,.2f}'.format(initial_value) }}</div>
-            <div class="progress-bar">
-                <div id="progressFill"></div>
+            <div class="page" id="page1">
+                <h1>Is Moe a Millionaire Yet?</h1>
+                <div id="status">Not Yet</div>
+                <div id="totalValue">${{ '{:,.2f}'.format(initial_value) }}</div>
+                <div class="progress-bar">
+                    <div id="progressFill"></div>
+                </div>
+                <div id="progressText">0% to $1,000,000</div>
+                <div class="scroll-indicator" onclick="smoothScroll()">▼</div>
             </div>
-            <div id="progressText">0% to $1,000,000</div>
+            <div class="page" id="page2">
+                <h2>About Moe's Journey</h2>
+                <p>Follow Moe's exciting journey to becoming a millionaire! This page tracks Moe's progress in real-time, updating every few seconds to show the latest value of his holdings.</p>
+                <h2>How It Works</h2>
+                <p>We're tracking the value of Moe's tokens using live data from the cryptocurrency markets. As the token price fluctuates, you'll see Moe's total value change in real-time.</p>
+                <div class="scroll-indicator" onclick="smoothScroll()">▲</div>
+            </div>
         </div>
         <script>
             let currentValue = {{ initial_value }};
             let targetValue = {{ initial_value }};
             const millionUSD = {{ MILLION_USD }};
             let isMillionaire = false;
+            let isSecondPageVisible = false;
+            let isScrolling = false;
 
             function formatNumber(num) {
                 return num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -205,10 +259,58 @@ def home():
                     .catch(error => console.error('Error:', error));
             }
 
-            setInterval(interpolateValues, 50);
-            setInterval(fetchLatestData, 1000);
+            function smoothScroll() {
+                if (isScrolling) return;
+                isScrolling = true;
+                isSecondPageVisible = !isSecondPageVisible;
+                const page1 = document.getElementById('page1');
+                const page2 = document.getElementById('page2');
+                if (isSecondPageVisible) {
+                    page1.style.transform = 'translateY(-100%)';
+                    page2.style.transform = 'translateY(0)';
+                } else {
+                    page1.style.transform = 'translateY(0)';
+                    page2.style.transform = 'translateY(100%)';
+                }
+                setTimeout(() => { isScrolling = false; }, 500);
+            }
 
-            updateDisplay();
+            let touchStartY = 0;
+            let touchEndY = 0;
+
+            document.addEventListener('touchstart', e => {
+                touchStartY = e.touches[0].clientY;
+            }, false);
+
+            document.addEventListener('touchmove', e => {
+                touchEndY = e.touches[0].clientY;
+            }, false);
+
+            document.addEventListener('touchend', e => {
+                if (touchStartY - touchEndY > 20 && !isSecondPageVisible) {
+                    smoothScroll();
+                } else if (touchEndY - touchStartY > 20 && isSecondPageVisible) {
+                    smoothScroll();
+                }
+                touchStartY = 0;
+                touchEndY = 0;
+            }, false);
+
+            window.addEventListener('wheel', (e) => {
+                if (e.deltaY > 0 && !isSecondPageVisible) {
+                    smoothScroll();
+                } else if (e.deltaY < 0 && isSecondPageVisible) {
+                    smoothScroll();
+                }
+            }, { passive: true });
+
+            // Interpolate values every 50ms for smooth animation
+            setInterval(interpolateValues, 50);
+
+            // Fetch new data every 3 seconds
+            setInterval(fetchLatestData, 3000);
+
+            // Initial fetch
             fetchLatestData();
         </script>
     </body>
@@ -218,7 +320,7 @@ def home():
 
 @app.route('/get_status')
 def get_status():
-    price = fetch_token_price(MOE_ADDRESS)
+    price = fetch_token_price()
     total_value = price * INITIAL_TOKENS
     return jsonify({
         'total_value': total_value
