@@ -145,7 +145,7 @@ def home():
             }
             .scroll-indicator {
                 position: absolute;
-                bottom: 7%;
+                bottom: 5%;
                 left: 50%;
                 transform: translateX(-50%);
                 font-size: 3rem;
@@ -174,6 +174,7 @@ def home():
                 #progressText { font-size: 5vw; }
                 #page2 h2 { font-size: 6vw; }
                 #page2 p { font-size: 4vw; }
+                .scroll-indicator { bottom: 12% }
             }
         </style>
     </head>
