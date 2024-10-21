@@ -145,7 +145,7 @@ def home():
             }
             .scroll-indicator {
                 position: absolute;
-                bottom: 5vh;
+                bottom: 7%;
                 left: 50%;
                 transform: translateX(-50%);
                 font-size: 3rem;
